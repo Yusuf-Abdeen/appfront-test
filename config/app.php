@@ -123,4 +123,21 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These are custom configuration options for the application.
+    |
+    */
+
+    'default_exchange_rate' => env('EXCHANGE_RATE', 0.85),
+    'price_notification_email' => env('PRICE_NOTIFICATION_EMAIL', 'admin@example.com'),
+    'product_image' => [
+        'default' => 'product-placeholder.jpg',
+        'max_size' => 2048, // KB
+        'allowed_extensions' => ['jpeg', 'png', 'jpg', 'gif'],
+    ],
+
 ];

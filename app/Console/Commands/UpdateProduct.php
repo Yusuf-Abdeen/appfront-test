@@ -3,9 +3,10 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Product;
-use Illuminate\Support\Facades\Validator;
+use App\Models\Product; // Added missing import
+use App\Repositories\ProductRepository;
 use App\Jobs\SendPriceChangeNotification;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 
 class UpdateProduct extends Command
@@ -25,13 +26,20 @@ class UpdateProduct extends Command
     protected $description = 'Update a product with the specified details';
 
     /**
+     * @var ProductRepository
+     */
+    protected ProductRepository $productRepository;
+
+    /**
      * Create a new command instance.
      *
+     * @param ProductRepository $productRepository
      * @return void
      */
-    public function __construct()
+    public function __construct(ProductRepository $productRepository)
     {
         parent::__construct();
+        $this->productRepository = $productRepository;
     }
 
     /**
@@ -39,61 +47,109 @@ class UpdateProduct extends Command
      *
      * @return int
      */
-    public function handle()
+    public function handle(): int
     {
         $id = $this->argument('id');
-        $product = Product::find($id);
+        $product = $this->productRepository->findById($id);
 
+        if (!$product) {
+            $this->error("Product with ID {$id} not found.");
+            return 1;
+        }
+
+        $data = $this->collectProductData();
+
+        if (empty($data)) {
+            $this->info("No changes provided. Product remains unchanged.");
+            return 0;
+        }
+
+        $validator = Validator::make($data, $this->validationRules());
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->all() as $error) {
+                $this->error($error);
+            }
+            return 1;
+        }
+
+        $oldPrice = $product->price;
+
+        $this->productRepository->update($product, $data);
+        $this->info("Product updated successfully.");
+
+        $this->handlePriceChange($product, $oldPrice);
+
+        return 0;
+    }
+
+    /**
+     * Collect product data from command options
+     *
+     * @return array
+     */
+    private function collectProductData(): array
+    {
         $data = [];
+
         if ($this->option('name')) {
             $data['name'] = $this->option('name');
-            if (empty($data['name']) || trim($data['name']) == '') {
-                $this->error("Name cannot be empty.");
-                return 1;
-            }
-            if (strlen($data['name']) < 3) {
-                $this->error("Name must be at least 3 characters long.");
-                return 1;
-            }
         }
+
         if ($this->option('description')) {
             $data['description'] = $this->option('description');
         }
+
         if ($this->option('price')) {
             $data['price'] = $this->option('price');
         }
 
+        return $data;
+    }
 
-        $oldPrice = $product->price;
+    /**
+     * Get validation rules for product data
+     *
+     * @return array
+     */
+    private function validationRules(): array
+    {
+        return [
+            'name' => 'sometimes|required|string|min:3',
+            'description' => 'sometimes|nullable|string',
+            'price' => 'sometimes|numeric|min:0',
+        ];
+    }
 
-        if (!empty($data)) {
-            $product->update($data);
-            $product->save();
+    /**
+     * Handle price change notification if needed
+     *
+     * @param Product $product
+     * @param float $oldPrice
+     * @return void
+     */
+    private function handlePriceChange(Product $product, float $oldPrice): void
+    {
+        if ($oldPrice != $product->price) {
+            $this->info("Price changed from {$oldPrice} to {$product->price}.");
 
-            $this->info("Product updated successfully.");
+            $notificationEmail = config('app.price_notification_email', 'admin@example.com');
 
-            // Check if price has changed
-            if (isset($data['price']) && $oldPrice != $product->price) {
-                $this->info("Price changed from {$oldPrice} to {$product->price}.");
-
-                $notificationEmail = env('PRICE_NOTIFICATION_EMAIL', 'admin@example.com');
-
-                try {
-                    SendPriceChangeNotification::dispatch(
-                        $product,
-                        $oldPrice,
-                        $product->price,
-                        $notificationEmail
-                    );
-                    $this->info("Price change notification dispatched to {$notificationEmail}.");
-                } catch (\Exception $e) {
-                    $this->error("Failed to dispatch price change notification: " . $e->getMessage());
-                }
+            try {
+                SendPriceChangeNotification::dispatch(
+                    $product,
+                    $oldPrice,
+                    $product->price,
+                    $notificationEmail
+                );
+                $this->info("Price change notification dispatched to {$notificationEmail}.");
+            } catch (\Exception $e) {
+                Log::error('Failed to dispatch price change notification', [
+                    'message' => $e->getMessage(),
+                    'product_id' => $product->id
+                ]);
+                $this->error("Failed to dispatch price change notification: " . $e->getMessage());
             }
-        } else {
-            $this->info("No changes provided. Product remains unchanged.");
         }
-
-        return 0;
     }
 }

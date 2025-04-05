@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Login</title>
     <link rel="stylesheet" href="{{ asset('css/custom.css') }}">
     <style>
@@ -38,18 +39,11 @@
             cursor: pointer;
         }
         .error-message {
-            color: red;
-            margin-bottom: 15px;
-        }
-        .login-help {
-            margin-top: 20px;
+            color: #721c24;
+            background-color: #f8d7da;
             padding: 10px;
-            background-color: #f8f9fa;
+            margin-bottom: 15px;
             border-radius: 4px;
-            font-size: 14px;
-        }
-        .login-help p {
-            margin: 5px 0;
         }
     </style>
 </head>
@@ -63,17 +57,23 @@
             </div>
         @endif
 
-        <form action="{{ route('login.submit') }}" method="POST">            @csrf
+        <form action="{{ route('login.submit') }}" method="POST">
+            @csrf
             <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" class="form-control"
-                       value="{{ app()->environment('local') ? 'test@example.com' : '' }}" required>
+                       value="{{ old('email') }}" required>
+                @error('email')
+                    <div class="error-message">{{ $message }}</div>
+                @enderror
             </div>
 
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" class="form-control"
-                       value="{{ app()->environment('local') ? 'password' : '' }}" required>
+                <input type="password" id="password" name="password" class="form-control" required>
+                @error('password')
+                    <div class="error-message">{{ $message }}</div>
+                @enderror
             </div>
 
             <button type="submit" class="btn-login">Login</button>

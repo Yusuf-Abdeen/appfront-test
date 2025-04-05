@@ -2,59 +2,47 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Product;
+use App\Services\ExchangeRateService;
+use App\Repositories\ProductRepository;
+use Illuminate\View\View;
 
 class ProductController extends Controller
 {
-    public function index()
+    protected ProductRepository $productRepository;
+    protected ExchangeRateService $exchangeRateService;
+
+    public function __construct(
+        ProductRepository $productRepository,
+        ExchangeRateService $exchangeRateService
+    ) {
+        $this->productRepository = $productRepository;
+        $this->exchangeRateService = $exchangeRateService;
+    }
+
+    /**
+     * Display a listing of products.
+     *
+     * @return View
+     */
+    public function index(): View
     {
-        $products = Product::all();
-        $exchangeRate = $this->getExchangeRate();
+        $products = $this->productRepository->getAll();
+        $exchangeRate = $this->exchangeRateService->getUsdToEurRate();
 
         return view('products.list', compact('products', 'exchangeRate'));
     }
 
-    public function show(Request $request)
+    /**
+     * Display the specified product.
+     *
+     * @param Product $product
+     * @return View
+     */
+    public function show(Product $product): View
     {
-        $id = $request->route('product_id');
-        $product = Product::find($id);
-        $exchangeRate = $this->getExchangeRate();
+        $exchangeRate = $this->exchangeRateService->getUsdToEurRate();
 
         return view('products.show', compact('product', 'exchangeRate'));
-    }
-
-    /**
-     * @return float
-     */
-    private function getExchangeRate()
-    {
-        try {
-            $curl = curl_init();
-
-            curl_setopt_array($curl, [
-                CURLOPT_URL => "https://open.er-api.com/v6/latest/USD",
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 5,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "GET",
-            ]);
-
-            $response = curl_exec($curl);
-            $err = curl_error($curl);
-
-            curl_close($curl);
-
-            if (!$err) {
-                $data = json_decode($response, true);
-                if (isset($data['rates']['EUR'])) {
-                    return $data['rates']['EUR'];
-                }
-            }
-        } catch (\Exception $e) {
-
-        }
-
-        return env('EXCHANGE_RATE', 0.85);
     }
 }
